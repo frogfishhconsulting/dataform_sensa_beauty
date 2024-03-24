@@ -1,0 +1,50 @@
+config {
+    type: "view",
+    database: "sensabeauty",
+    schema: "google_analytics",
+}
+
+with cte_1 as (
+  SELECT
+    event_date,
+    TIMESTAMP_MICROS(CAST(event_timestamp AS INT64)) AS event_timestamp,
+    event_name,
+    user_pseudo_id,
+    (
+    SELECT
+      value.int_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'ga_session_id') AS session_id,
+    (
+    SELECT
+      value.string_value
+    FROM
+      UNNEST(event_params)
+    WHERE
+      KEY = 'page_location') AS page_location
+  FROM
+    ${ref("raw_google_analytics")}),
+
+cte_2 as (select 
+max(event_timestamp) as event_timestamp,
+session_id
+
+from cte_1 
+group by session_id),
+
+
+cte_3 as (select
+a.event_date,
+a.event_timestamp, 
+a.session_id,
+regexp_replace(page_location, r'\?.*', '') as bounce_page_location
+
+from cte_1 as a 
+inner join cte_2 as b on a.session_id = b.session_id and a.event_timestamp = b.event_timestamp
+order by session_id)
+
+select distinct * 
+
+from cte_3

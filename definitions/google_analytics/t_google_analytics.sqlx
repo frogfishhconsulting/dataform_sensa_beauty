@@ -1,0 +1,70 @@
+config {
+    type: "view",
+    database: "sensabeauty",
+    schema: "google_analytics"
+}
+
+WITH
+  cte_1 AS (
+  SELECT
+    DISTINCT user_pseudo_id,
+    traffic_source.name AS campaign,
+    traffic_source.source AS SOURCE,
+    traffic_source.medium AS medium,
+  FROM
+    ${ref("raw_google_analytics")}),
+  cte_2 AS (
+  SELECT
+    event_value_in_usd AS purchase_amount,
+    PARSE_DATE("%Y%m%d", event_date) AS purchase_date,
+    user_pseudo_id
+  FROM
+    ${ref("raw_google_analytics")}
+  WHERE
+    event_name = 'purchase'),
+  cte_3 AS (
+  SELECT
+    user_pseudo_id,
+    first_visit_date,
+    landing_page
+  FROM
+    ${ref("t_google_analytics_landing_page")} ),
+
+    cte_4 as (
+      SELECT 
+  item_name,
+  PARSE_DATE("%Y%m%d", event_date) AS purchase_date,
+  user_pseudo_id
+FROM 
+  ${ref("raw_google_analytics")},
+  UNNEST(items) as item
+WHERE 
+  event_name = 'purchase'
+    )
+SELECT
+  a.user_pseudo_id,
+  a.campaign,
+  a.source,
+  a.medium,
+  b.purchase_amount,
+  b.purchase_date,
+  CASE
+    WHEN b.purchase_date IS NOT NULL THEN 1
+  ELSE
+  0
+END
+  AS is_purchase,
+  c.first_visit_date,
+  c.landing_page,
+  d.item_name
+FROM
+  cte_1 AS a
+LEFT JOIN
+  cte_2 AS b
+USING
+  (user_pseudo_id)
+LEFT JOIN
+  cte_3 AS c
+USING
+  (user_pseudo_id)
+LEFT JOIN cte_4 as d on a.user_pseudo_id = d.user_pseudo_id and b.purchase_date = d.purchase_date
