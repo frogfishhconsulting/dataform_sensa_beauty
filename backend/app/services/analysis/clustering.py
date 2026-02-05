@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections import Counter, defaultdict
+from collections import defaultdict
 from typing import Any
 
 import numpy as np
@@ -25,6 +25,8 @@ def _engagement_score(eng: dict[str, Any]) -> float:
 
 
 def _fallback_vectors(texts: list[str]) -> np.ndarray:
+    if not texts:
+        return np.zeros((0, 1), dtype=np.float32)
     vec = TfidfVectorizer(stop_words="english", max_features=2048)
     m = vec.fit_transform(texts)
     return m.toarray()
@@ -32,6 +34,8 @@ def _fallback_vectors(texts: list[str]) -> np.ndarray:
 
 def cluster_texts(texts: list[str], *, max_k: int = 12) -> tuple[list[int], np.ndarray]:
     cleaned = [clean_text(t) for t in texts]
+    if not cleaned:
+        return [], np.zeros((0, 1), dtype=np.float32)
     emb = embed_texts(cleaned)
     if emb:
         X = np.array(emb, dtype=np.float32)
@@ -79,6 +83,8 @@ def build_clusters(
     docs: list of {id, url, text, engagement_json}
     Returns {"pain_point":[...], "highlight":[...]} cluster dicts with evidence.
     """
+    if not docs:
+        return {"pain_point": [], "highlight": []}
     texts = [d["text"] for d in docs]
     labels, _X = cluster_texts(texts)
     groups: dict[int, list[int]] = defaultdict(list)
