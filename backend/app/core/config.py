@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     log_level: str = "INFO"
     backend_public_base_url: str = "http://localhost:8000"
+    cors_allow_origins_csv: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # Database
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/zeitgeist"

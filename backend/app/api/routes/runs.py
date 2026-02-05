@@ -23,6 +23,7 @@ from app.schemas.cluster import ClusterOut
 from app.schemas.push import GoogleAdsPushRequest, GoogleAdsPushResult
 from app.schemas.run import RunCreate, RunSummaryOut
 from app.services.google_ads.push import dry_run_validate, push_live
+from app.services.pipeline.run_pipeline import run_pipeline
 from app.worker.tasks import run_pipeline_task
 
 router = APIRouter()
@@ -48,7 +49,7 @@ def create_run(payload: RunCreate, background: BackgroundTasks, db: Session = De
         run.error_json = {**(run.error_json or {}), "celery_dispatch_error": str(e)}
         db.add(run)
         db.commit()
-        background.add_task(run_pipeline_task, str(run.id))
+        background.add_task(run_pipeline, str(run.id))
 
     return {"run_id": str(run.id)}
 
