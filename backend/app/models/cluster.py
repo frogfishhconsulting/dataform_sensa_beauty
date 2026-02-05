@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, Enum, Float, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -21,7 +21,7 @@ class Cluster(Base):
     label: Mapped[str] = mapped_column(Text, nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     intensity_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    evidence: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    evidence: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

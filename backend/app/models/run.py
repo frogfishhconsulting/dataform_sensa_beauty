@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, Enum, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, Enum, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -21,8 +21,8 @@ class Run(Base):
     recency_days: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[RunStatus] = mapped_column(Enum(RunStatus, name="run_status"), nullable=False, default=RunStatus.queued)
 
-    config_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    error_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    config_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    error_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
     documents = relationship("Document", back_populates="run", cascade="all, delete-orphan")
     clusters = relationship("Cluster", back_populates="run", cascade="all, delete-orphan")

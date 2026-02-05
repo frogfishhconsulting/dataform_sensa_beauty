@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -22,8 +22,8 @@ class GoogleAdsPush(Base):
     ad_group_id: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[PushStatus] = mapped_column(Enum(PushStatus, name="push_status"), nullable=False)
 
-    request_payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    response_payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    request_payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    response_payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     run = relationship("Run", back_populates="pushes")
