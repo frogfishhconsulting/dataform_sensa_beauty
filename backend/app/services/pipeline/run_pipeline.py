@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
@@ -62,28 +63,37 @@ def run_pipeline(run_id: str) -> dict:
                 platform = "reddit" if "Reddit" in name else ("youtube" if "YouTube" in name else "x")
                 collector_errors[platform] = {"skipped": True, "reason": str(e)}
 
-        for c in collectors:
-            try:
-                docs = c.collect(run.topic, since)
-                for nd in docs:
-                    d = Document(
-                        run_id=rid,
-                        platform=nd.platform,
-                        source_id=nd.source_id,
-                        url=nd.url,
-                        author=nd.author,
-                        created_at=nd.created_at,
-                        engagement_json=nd.engagement,
-                        title=nd.title,
-                        text=clean_text(nd.text),
-                        raw_json=nd.raw,
-                    )
-                    db.add(d)
-                db.commit()
-                collected_counts[c.platform] = len(docs)
-            except Exception as e:  # noqa: BLE001
-                log.exception("collector failed", extra={"run_id": run_id, "step": "collect", "topic": run.topic})
-                collector_errors[c.platform] = {"error": str(e)}
+        collected_by_platform: dict[str, list] = {}
+        if collectors:
+            with ThreadPoolExecutor(max_workers=min(3, len(collectors))) as ex:
+                futures = {ex.submit(c.collect, run.topic, since): c for c in collectors}
+                for fut in as_completed(futures):
+                    c = futures[fut]
+                    try:
+                        docs = fut.result()
+                        collected_by_platform[c.platform] = docs
+                        collected_counts[c.platform] = len(docs)
+                    except Exception as e:  # noqa: BLE001
+                        log.exception("collector failed", extra={"run_id": run_id, "step": "collect", "topic": run.topic})
+                        collector_errors[c.platform] = {"error": str(e)}
+
+        # Store documents after collection so DB session is single-threaded.
+        for platform, docs in collected_by_platform.items():
+            for nd in docs:
+                d = Document(
+                    run_id=rid,
+                    platform=nd.platform,
+                    source_id=nd.source_id,
+                    url=nd.url,
+                    author=nd.author,
+                    created_at=nd.created_at,
+                    engagement_json=nd.engagement,
+                    title=nd.title,
+                    text=clean_text(nd.text),
+                    raw_json=nd.raw,
+                )
+                db.add(d)
+            db.commit()
 
         _merge_error(run, {"collectors": collector_errors, "collected_counts": collected_counts})
         db.add(run)
