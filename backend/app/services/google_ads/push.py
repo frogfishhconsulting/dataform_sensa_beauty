@@ -215,8 +215,7 @@ def _google_ads_mutate_responsive_search_ad(*, req: dict[str, Any], run_id: str,
         asset.text = d
         rsa.descriptions.append(asset)
 
-    # Labeling by run_id is commonly done via asset labels; keeping lightweight here by embedding in final_url query is not acceptable.
-    # For production, you can attach a Label resource and apply it to the ad.
+    label_resource = _ensure_label(client=client, customer_id=customer_id, label_name=f"run:{run_id}"[:80], validate_only=validate_only)
 
     try:
         resp = ad_group_ad_service.mutate_ad_group_ads(
@@ -224,7 +223,63 @@ def _google_ads_mutate_responsive_search_ad(*, req: dict[str, Any], run_id: str,
             operations=[ad_group_ad_operation],
             validate_only=validate_only,
         )
-        return {"results": [str(r.resource_name) for r in resp.results], "validate_only": validate_only}
+        ad_group_ad_resource = str(resp.results[0].resource_name) if resp.results else None
+        if ad_group_ad_resource and label_resource:
+            _apply_label_to_ad_group_ad(
+                client=client,
+                customer_id=customer_id,
+                ad_group_ad_resource=ad_group_ad_resource,
+                label_resource=label_resource,
+                validate_only=validate_only,
+            )
+        return {"results": [str(r.resource_name) for r in resp.results], "validate_only": validate_only, "label": label_resource}
     except GoogleAdsException as ex:
         raise RuntimeError(f"{ex.error.code().name}: {ex.failure}") from ex
+
+
+def _ensure_label(*, client: Any, customer_id: str, label_name: str, validate_only: bool) -> str | None:
+    """
+    Ensure a Label exists with label_name and return its resource_name.
+    In validate_only mode, we still attempt a validate-only create if not found.
+    """
+    ga_service = client.get_service("GoogleAdsService")
+    safe_name = label_name.replace("'", "\\'")
+    query = f"SELECT label.resource_name FROM label WHERE label.name = '{safe_name}' LIMIT 1"
+    try:
+        stream = ga_service.search_stream(customer_id=customer_id, query=query)
+        for batch in stream:
+            for row in batch.results:
+                return str(row.label.resource_name)
+    except Exception:
+        pass
+
+    try:
+        label_service = client.get_service("LabelService")
+        op = client.get_type("LabelOperation")
+        op.create.name = label_name
+        resp = label_service.mutate_labels(customer_id=customer_id, operations=[op], validate_only=validate_only)
+        if resp.results:
+            return str(resp.results[0].resource_name)
+    except Exception:
+        return None
+    return None
+
+
+def _apply_label_to_ad_group_ad(
+    *,
+    client: Any,
+    customer_id: str,
+    ad_group_ad_resource: str,
+    label_resource: str,
+    validate_only: bool,
+) -> None:
+    try:
+        svc = client.get_service("AdGroupAdLabelService")
+        op = client.get_type("AdGroupAdLabelOperation")
+        op.create.ad_group_ad = ad_group_ad_resource
+        op.create.label = label_resource
+        svc.mutate_ad_group_ad_labels(customer_id=customer_id, operations=[op], validate_only=validate_only)
+    except Exception:
+        # Label attachment should not block ad creation in validate_only workflows.
+        return
 

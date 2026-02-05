@@ -16,7 +16,8 @@ from app.db.session import get_db
 from app.models.ad_assets import AdAssets
 from app.models.cluster import Cluster
 from app.models.document import Document
-from app.models.enums import Platform, RunStatus
+from app.models.enums import Platform, PushStatus, RunStatus
+from app.models.google_ads_push import GoogleAdsPush
 from app.models.run import Run
 from app.schemas.ad_assets import AdAssetsOut
 from app.schemas.cluster import ClusterOut
@@ -155,6 +156,19 @@ def push(run_id: uuid.UUID, payload: GoogleAdsPushRequest, db: Session = Depends
 
     if run.status != RunStatus.awaiting_approval:
         raise HTTPException(status_code=400, detail="run is not ready for approval/push")
+
+    dry_ok = (
+        db.execute(
+            select(GoogleAdsPush)
+            .where(GoogleAdsPush.run_id == run_id, GoogleAdsPush.status == PushStatus.dry_run_ok)
+            .order_by(GoogleAdsPush.created_at.desc())
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    if not dry_ok:
+        raise HTTPException(status_code=400, detail="dry-run validation required before push")
 
     res = push_live(run_id=str(run_id), req=payload.model_dump())
     return GoogleAdsPushResult(**res)
