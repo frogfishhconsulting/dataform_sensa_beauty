@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type RunStatus =
   | "queued"
@@ -51,10 +51,29 @@ type Results = {
     | {
         id: string;
         run_id: string;
-        rsa_sets: any[];
-        qa_report: any;
-        final_selection: any;
+        rsa_sets: RsaSet[];
+        qa_report: unknown;
+        final_selection: unknown;
       };
+};
+
+type RsaSet = {
+  theme?: string;
+  headlines?: string[];
+  descriptions?: string[];
+  pin_suggestions?: Record<string, unknown>;
+  notes?: string | null;
+};
+
+type DryRunState = {
+  http_ok?: boolean;
+  ok?: boolean;
+  status?: string;
+  message?: string | null;
+  request_payload?: unknown;
+  response_payload?: unknown;
+  push_result?: unknown;
+  push_http_ok?: boolean;
 };
 
 function Badge({ status }: { status: RunStatus }) {
@@ -105,25 +124,25 @@ export default function RunPage({ params }: { params: { id: string } }) {
   const [campaignId, setCampaignId] = useState("");
   const [adGroupId, setAdGroupId] = useState("");
   const [finalUrl, setFinalUrl] = useState("");
-  const [dryRunState, setDryRunState] = useState<any>(null);
+  const [dryRunState, setDryRunState] = useState<DryRunState | null>(null);
   const [pushing, setPushing] = useState(false);
 
-  async function fetchSummary() {
+  const fetchSummary = useCallback(async () => {
     const res = await fetch(`${backendUrl}/api/runs/${runId}`, { cache: "no-store" });
     if (!res.ok) throw new Error(await res.text());
     const data = (await res.json()) as RunSummary;
     setSummary(data);
     setStatus(data.run.status);
     return data;
-  }
+  }, [backendUrl, runId]);
 
-  async function fetchResults() {
+  const fetchResults = useCallback(async () => {
     const res = await fetch(`${backendUrl}/api/runs/${runId}/results`, { cache: "no-store" });
     if (!res.ok) throw new Error(await res.text());
     const data = (await res.json()) as Results;
     setResults(data);
     return data;
-  }
+  }, [backendUrl, runId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,7 +171,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
     return () => {
       cancelled = true;
     };
-  }, [backendUrl, runId]);
+  }, [fetchResults, fetchSummary]);
 
   useEffect(() => {
     const es = new EventSource(`${backendUrl}/api/runs/${runId}/stream`);
@@ -178,7 +197,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
       }
     });
     return () => es.close();
-  }, [backendUrl, runId]);
+  }, [backendUrl, fetchResults, fetchSummary, runId]);
 
   useEffect(() => {
     // When user changes set selection, load that set for editing.
@@ -224,7 +243,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    setDryRunState({ http_ok: res.ok, ...data });
+    setDryRunState({ http_ok: res.ok, ...(data as object) } as DryRunState);
   }
 
   async function pushLive() {
@@ -254,7 +273,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      setDryRunState((prev: any) => ({ ...prev, push_result: data, push_http_ok: res.ok }));
+      setDryRunState((prev) => ({ ...(prev || {}), push_result: data, push_http_ok: res.ok }));
       await fetchSummary();
     } finally {
       setPushing(false);
@@ -265,7 +284,11 @@ export default function RunPage({ params }: { params: { id: string } }) {
   const painPoints = clusters.filter((c) => c.type === "pain_point");
   const highlights = clusters.filter((c) => c.type === "highlight");
 
-  const collectorErrors = (summary?.run?.error_json as any)?.collectors || {};
+  const collectorErrors: Record<string, unknown> =
+    (summary?.run?.error_json as Record<string, unknown> | undefined)?.collectors &&
+    typeof (summary?.run?.error_json as Record<string, unknown>).collectors === "object"
+      ? ((summary?.run?.error_json as Record<string, unknown>).collectors as Record<string, unknown>)
+      : {};
 
   return (
     <div className="grid gap-6">
@@ -433,7 +456,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
         {results?.ad_assets?.rsa_sets?.length ? (
           <>
             <div className="mt-4 flex flex-wrap gap-2">
-              {results.ad_assets.rsa_sets.map((s: any, i: number) => (
+              {results.ad_assets.rsa_sets.map((s: RsaSet, i: number) => (
                 <button
                   key={i}
                   onClick={() => setSelectedSetIdx(i)}
