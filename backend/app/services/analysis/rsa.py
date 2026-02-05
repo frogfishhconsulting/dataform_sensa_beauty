@@ -26,16 +26,18 @@ def enforce_limits(headlines: list[str], descriptions: list[str]) -> tuple[list[
     issues: dict[str, Any] = {"headline_too_long": [], "description_too_long": []}
     h2: list[str] = []
     for h in headlines:
+        original = re.sub(r"\s+", " ", (h or "").strip())
         hh = _trim_to(h, HEADLINE_MAX)
-        if len(hh) > HEADLINE_MAX:
-            issues["headline_too_long"].append({"text": h, "len": len(h)})
+        if len(original) > HEADLINE_MAX:
+            issues["headline_too_long"].append({"text": original, "len": len(original)})
         if hh:
             h2.append(hh)
     d2: list[str] = []
     for d in descriptions:
+        original = re.sub(r"\s+", " ", (d or "").strip())
         dd = _trim_to(d, DESC_MAX)
-        if len(dd) > DESC_MAX:
-            issues["description_too_long"].append({"text": d, "len": len(d)})
+        if len(original) > DESC_MAX:
+            issues["description_too_long"].append({"text": original, "len": len(original)})
         if dd:
             d2.append(dd)
     return h2, d2, issues
