@@ -33,9 +33,10 @@ class RedditCollector(Collector):
                 "grant_type": "password",
                 "username": settings.reddit_username,
                 "password": settings.reddit_password,
+                "scope": "read",
             }
         else:
-            data = {"grant_type": "client_credentials"}
+            data = {"grant_type": "client_credentials", "scope": "read"}
         headers = {"User-Agent": settings.reddit_user_agent}
         r = httpx.post("https://www.reddit.com/api/v1/access_token", auth=auth, data=data, headers=headers, timeout=20)
         r.raise_for_status()
