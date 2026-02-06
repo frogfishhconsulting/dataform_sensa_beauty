@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     reddit_client_id: str | None = None
     reddit_client_secret: str | None = None
     reddit_user_agent: str = "zeitgeist-rsa-agent/0.1"
+    reddit_username: str | None = None
+    reddit_password: str | None = None
 
     x_bearer_token: str | None = None
 

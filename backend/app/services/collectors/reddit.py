@@ -20,13 +20,22 @@ class RedditCollector(Collector):
     platform = "reddit"
 
     def __init__(self) -> None:
-        if not settings.reddit_client_id or not settings.reddit_client_secret:
-            raise MissingCredentials("missing reddit_client_id/reddit_client_secret")
+        if not settings.reddit_client_id:
+            raise MissingCredentials("missing reddit_client_id")
 
     @retry(stop=stop_after_attempt(4), wait=wait_exponential(min=1, max=20))
     def _get_token(self) -> str:
-        auth = (settings.reddit_client_id, settings.reddit_client_secret)
-        data = {"grant_type": "client_credentials"}
+        # Prefer "password" grant for script apps (most reliable for /search + comments).
+        # Fallback to client_credentials for app-only access.
+        auth = (settings.reddit_client_id, settings.reddit_client_secret or "")
+        if settings.reddit_username and settings.reddit_password:
+            data = {
+                "grant_type": "password",
+                "username": settings.reddit_username,
+                "password": settings.reddit_password,
+            }
+        else:
+            data = {"grant_type": "client_credentials"}
         headers = {"User-Agent": settings.reddit_user_agent}
         r = httpx.post("https://www.reddit.com/api/v1/access_token", auth=auth, data=data, headers=headers, timeout=20)
         r.raise_for_status()
