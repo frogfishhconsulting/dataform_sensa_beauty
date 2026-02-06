@@ -43,6 +43,16 @@ class RedditCollector(Collector):
         return r.json()["access_token"]
 
     def collect(self, topic: str, since_datetime: datetime) -> list[NormalizedDocument]:
+        if settings.reddit_use_praw:
+            try:
+                return self._collect_praw(topic, since_datetime)
+            except Exception as e:  # noqa: BLE001
+                log.warning("praw collector failed; falling back to httpx: %s", e)
+                # Fall back to httpx-based collector to keep partial results flowing.
+                return self._collect_httpx(topic, since_datetime)
+        return self._collect_httpx(topic, since_datetime)
+
+    def _collect_httpx(self, topic: str, since_datetime: datetime) -> list[NormalizedDocument]:
         token = self._get_token()
         headers = {"Authorization": f"bearer {token}", "User-Agent": settings.reddit_user_agent}
 
@@ -114,5 +124,77 @@ class RedditCollector(Collector):
                         raw=raw,
                     )
                 )
+        return out
+
+    def _collect_praw(self, topic: str, since_datetime: datetime) -> list[NormalizedDocument]:
+        import praw  # type: ignore
+
+        praw_kwargs: dict[str, Any] = {
+            "client_id": settings.reddit_client_id,
+            "client_secret": settings.reddit_client_secret or None,
+            "user_agent": settings.reddit_user_agent,
+        }
+        if settings.reddit_username and settings.reddit_password:
+            praw_kwargs["username"] = settings.reddit_username
+            praw_kwargs["password"] = settings.reddit_password
+
+        reddit = praw.Reddit(**praw_kwargs)
+
+        # time_filter: one of hour, day, week, month, year, all
+        delta_days = max(1, int((datetime.now(timezone.utc) - since_datetime).total_seconds() // 86400))
+        if delta_days <= 7:
+            time_filter = "week"
+        else:
+            time_filter = "month"
+
+        out: list[NormalizedDocument] = []
+        for sub in reddit.subreddit("all").search(topic, sort="top", time_filter=time_filter, limit=25):
+            created = datetime.fromtimestamp(getattr(sub, "created_utc", 0) or 0, tz=timezone.utc)
+            if created < since_datetime:
+                continue
+
+            url = f"https://www.reddit.com{sub.permalink}" if getattr(sub, "permalink", None) else (getattr(sub, "url", "") or "")
+            title = clean_text(getattr(sub, "title", "") or "")
+            selftext = clean_text(getattr(sub, "selftext", "") or "")
+
+            comments_text = ""
+            try:
+                sub.comment_sort = "top"
+                # Accessing sub.comments triggers a fetch of comment forest.
+                top_level = list(getattr(sub, "comments", [])[:10])
+                top_comments: list[str] = []
+                for c in top_level[:8]:
+                    body = clean_text(getattr(c, "body", "") or "")
+                    if body:
+                        top_comments.append(body)
+                if top_comments:
+                    comments_text = "\n\nTop comments:\n" + "\n- ".join([""] + top_comments[:6])
+            except Exception as e:  # noqa: BLE001
+                log.info("praw comment fetch failed: %s", e)
+
+            text = clean_text("\n\n".join([title, selftext, comments_text]).strip())
+            if not text:
+                continue
+
+            engagement: dict[str, Any] = {
+                "upvotes": getattr(sub, "ups", None),
+                "comments": getattr(sub, "num_comments", None),
+                "score": getattr(sub, "score", None),
+            }
+            raw: dict[str, Any] = {"praw_submission_id": getattr(sub, "id", None), "subreddit": str(getattr(sub, "subreddit", ""))}
+
+            out.append(
+                NormalizedDocument(
+                    platform=Platform.reddit,
+                    source_id=str(getattr(sub, "id", "")),
+                    url=url,
+                    author=str(getattr(sub, "author", "")) if getattr(sub, "author", None) else None,
+                    created_at=created,
+                    title=title or None,
+                    text=text,
+                    engagement=engagement,
+                    raw=raw,
+                )
+            )
         return out
 
