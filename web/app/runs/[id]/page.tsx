@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type RunStatus =
   | "queued"
@@ -104,10 +104,6 @@ function CharCounter({ value, max }: { value: string; max: number }) {
 
 export default function RunPage({ params }: { params: { id: string } }) {
   const runId = params.id;
-  const backendUrl = useMemo(
-    () => process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000",
-    [],
-  );
 
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [results, setResults] = useState<Results | null>(null);
@@ -128,21 +124,21 @@ export default function RunPage({ params }: { params: { id: string } }) {
   const [pushing, setPushing] = useState(false);
 
   const fetchSummary = useCallback(async () => {
-    const res = await fetch(`${backendUrl}/api/runs/${runId}`, { cache: "no-store" });
+    const res = await fetch(`/api/runs/${runId}`, { cache: "no-store" });
     if (!res.ok) throw new Error(await res.text());
     const data = (await res.json()) as RunSummary;
     setSummary(data);
     setStatus(data.run.status);
     return data;
-  }, [backendUrl, runId]);
+  }, [runId]);
 
   const fetchResults = useCallback(async () => {
-    const res = await fetch(`${backendUrl}/api/runs/${runId}/results`, { cache: "no-store" });
+    const res = await fetch(`/api/runs/${runId}/results`, { cache: "no-store" });
     if (!res.ok) throw new Error(await res.text());
     const data = (await res.json()) as Results;
     setResults(data);
     return data;
-  }, [backendUrl, runId]);
+  }, [runId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,7 +170,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
   }, [fetchResults, fetchSummary]);
 
   useEffect(() => {
-    const es = new EventSource(`${backendUrl}/api/runs/${runId}/stream`);
+    const es = new EventSource(`/api/runs/${runId}/stream`);
     es.addEventListener("status", async (evt) => {
       try {
         const data = JSON.parse((evt as MessageEvent).data) as { status: RunStatus };
@@ -197,7 +193,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
       }
     });
     return () => es.close();
-  }, [backendUrl, fetchResults, fetchSummary, runId]);
+  }, [fetchResults, fetchSummary, runId]);
 
   useEffect(() => {
     // When user changes set selection, load that set for editing.
@@ -237,7 +233,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
         ],
       },
     };
-    const res = await fetch(`${backendUrl}/api/runs/${runId}/dry-run`, {
+    const res = await fetch(`/api/runs/${runId}/dry-run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -267,7 +263,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
           ],
         },
       };
-      const res = await fetch(`${backendUrl}/api/runs/${runId}/push`, {
+      const res = await fetch(`/api/runs/${runId}/push`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -575,7 +571,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
 
         <div className="mt-4 text-xs text-zinc-500">
           Tip: use the backend debug endpoint for raw docs:{" "}
-          <a className="underline" href={`${backendUrl}/api/runs/${runId}/documents`} target="_blank" rel="noreferrer">
+          <a className="underline" href={`/api/runs/${runId}/documents`} target="_blank" rel="noreferrer">
             /api/runs/{runId}/documents
           </a>
         </div>

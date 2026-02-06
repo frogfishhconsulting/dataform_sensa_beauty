@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 export default function Home() {
   const router = useRouter();
@@ -9,10 +9,6 @@ export default function Home() {
   const [recencyDays, setRecencyDays] = useState<7 | 14 | 30>(14);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const backendUrl = useMemo(() => {
-    return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,7 +20,7 @@ export default function Home() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`${backendUrl}/api/runs`, {
+      const res = await fetch(`/api/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic: trimmed, recency_days: recencyDays }),
@@ -90,10 +86,6 @@ export default function Home() {
           >
             {submitting ? "Starting…" : "Run analysis"}
           </button>
-
-          <div className="text-xs text-zinc-500">
-            Backend: <code className="rounded bg-zinc-100 px-1 py-0.5">{backendUrl}</code>
-          </div>
         </form>
       </div>
     </div>
